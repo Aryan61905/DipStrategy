@@ -141,7 +141,7 @@
                 statusMessage.textContent = 'Loading transactions...';
                 statusMessage.className = 'status loading';
                 
-                const response = await fetch('http://localhost:8000/api/transactions');
+                const response = await fetch('https://dipstrategy.onrender.com/api/transactions');
                 if (!response.ok) throw new Error('Failed to fetch transactions');
                 
                 const transactions = await response.json();
@@ -228,7 +228,7 @@
                     : 'Running TEST strategy...';
                 statusMessage.className = 'status loading';
                 
-                const response = await fetch(`http://localhost:8000/api/run-strategy?execute=${execute}`, {
+                const response = await fetch(`https://dipstrategy.onrender.com/api/run-strategy?execute=${execute}`, {
                     method: 'POST',
                     headers: {
                         'Accept': 'application/json',
