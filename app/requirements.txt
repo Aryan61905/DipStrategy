@@ -1,8 +1,7 @@
 fastapi==0.109.2
 uvicorn==0.27.1
-psycopg[binary]==3.1.18  # Updated version
+psycopg[binary,pool]==3.1.18  # This includes the pool package
 python-dotenv==1.0.1
 yfinance==0.2.37
 requests==2.31.0
 apscheduler==3.10.4
-h11==0.16.0
