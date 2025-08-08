@@ -1,0 +1,6 @@
+psycopg[binary]==3.1.8
+yfinance==0.2.18
+requests==2.28.1
+fastapi==0.85.0
+uvicorn==0.18.3
+python-dotenv==0.21.0

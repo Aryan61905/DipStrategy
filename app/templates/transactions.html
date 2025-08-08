@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{ title }}</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin-bottom: 20px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+            position: sticky;
+            top: 0;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        .profit-positive {
+            color: green;
+        }
+        .profit-negative {
+            color: red;
+        }
+        .active {
+            background-color: #e6f7ff;
+        }
+    </style>
+</head>
+<body>
+    <h1>{{ title }}</h1>
+    
+    <table>
+        <thead>
+            <tr>
+                <th>Ticker</th>
+                <th>Buy Date</th>
+                <th>Buy Price</th>
+                <th>Quantity</th>
+                <th>Current Price</th>
+                <th>Target Price</th>
+                <th>Value</th>
+                <th>Profit</th>
+                <th>Holding Days</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for tx in transactions %}
+            <tr class="{{ 'active' if not tx.sell_date else '' }}">
+                <td>{{ tx.tckr }}</td>
+                <td>{{ tx.buy_date.strftime('%Y-%m-%d') if tx.buy_date else '' }}</td>
+                <td>${{ "%.2f"|format(tx.average_cost) }}</td>
+                <td>{{ tx.quantity }}</td>
+                <td>${{ "%.2f"|format(tx.current_price) }}</td>
+                <td>${{ "%.2f"|format(tx.target_price) }}</td>
+                <td>${{ "%.2f"|format(tx.current_value) }}</td>
+                <td class="{{ 'profit-positive' if tx.profit and tx.profit > 0 else 'profit-negative' }}">
+                    {% if tx.profit is not none %}
+                        ${{ "%.2f"|format(tx.profit) }}
+                    {% endif %}
+                </td>
+                <td>{{ tx.holding_period if tx.holding_period is not none else 'Active' }}</td>
+                <td>
+                    {% if tx.sell_date %}
+                        Sold ({{ tx.sell_reason }})
+                    {% else %}
+                        ACTIVE
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    
+    <div>
+        <form action="/run-strategy" method="post">
+            <button type="submit" name="execute" value="true">Run Strategy (Live)</button>
+            <button type="submit" name="execute" value="false">Test Strategy</button>
+        </form>
+    </div>
+</body>
+</html>

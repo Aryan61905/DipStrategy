@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trading Strategy Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>Trading Strategy Dashboard</h1>
+        
+        <div class="controls">
+            <button id="runTestBtn">Run Test Strategy</button>
+            <button id="runLiveBtn">Run Live Strategy</button>
+            <button id="refreshBtn">Refresh Data</button>
+        </div>
+        
+        <div class="status" id="statusMessage"></div>
+        
+        <!-- Portfolio Summary Section -->
+        <div class="portfolio-summary">
+            <div class="summary-card">
+                <h3>Total Value</h3>
+                <div id="totalValue">-</div>
+            </div>
+            <div class="summary-card">
+                <h3>Total Invested</h3>
+                <div id="totalInvested">-</div>
+            </div>
+            <div class="summary-card">
+                <h3>Realized Profit</h3>
+                <div id="realizedProfit">-</div>
+            </div>
+            <div class="summary-card">
+                <h3>Unrealized Gain</h3>
+                <div id="unrealizedGain">-</div>
+            </div>
+        </div>
+        
+        <div class="table-container">
+            <table id="transactionsTable">
+                <thead>
+                    <tr>
+                        <th>Ticker</th>
+                        <th>Buy Date</th>
+                        <th>Buy Price</th>
+                        <th>Qty</th>
+                        <th>Current Price</th>
+                        <th>Target</th>
+                        <th>Value</th>
+                        <th>Profit</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="transactionsBody">
+                    <!-- Filled by JavaScript -->
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="chart-container">
+            <canvas id="profitChart"></canvas>
+        </div>
+    </div>
+
+    <script>
+        // DOM Elements
+        const transactionsBody = document.getElementById('transactionsBody');
+        const statusMessage = document.getElementById('statusMessage');
+        const runTestBtn = document.getElementById('runTestBtn');
+        const runLiveBtn = document.getElementById('runLiveBtn');
+        const refreshBtn = document.getElementById('refreshBtn');
+        let profitChart = null;
+
+        // Summary elements
+        const totalValueEl = document.getElementById('totalValue');
+        const totalInvestedEl = document.getElementById('totalInvested');
+        const realizedProfitEl = document.getElementById('realizedProfit');
+        const unrealizedGainEl = document.getElementById('unrealizedGain');
+
+        // Format currency
+        const formatCurrency = (value) => {
+            return value ? '$' + parseFloat(value).toFixed(2) : '-';
+        };
+
+        // Format date
+        const formatDate = (dateString) => {
+            if (!dateString) return '-';
+            const date = new Date(dateString);
+            return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+        };
+
+        // Calculate portfolio summary
+        const calculateSummary = (transactions) => {
+            let totalInvested = 0;
+            let totalValue = 0;
+            let realizedProfit = 0;
+            let unrealizedGain = 0;
+
+            transactions.forEach(tx => {
+                const positionValue = tx.current_price * tx.quantity;
+                const positionCost = tx.average_cost * tx.quantity;
+                
+                if (tx.sell_date) {
+                    // Closed position
+                    realizedProfit += tx.profit || 0;
+                } else {
+                    // Open position
+                    totalInvested += positionCost;
+                    unrealizedGain += positionValue - positionCost;
+                }
+                
+                totalValue += positionValue;
+            });
+
+            return {
+                totalInvested,
+                totalValue,
+                realizedProfit,
+                unrealizedGain
+            };
+        };
+
+        // Update summary display
+        const updateSummary = (summary) => {
+            totalValueEl.textContent = formatCurrency(summary.totalValue);
+            totalInvestedEl.textContent = formatCurrency(summary.totalInvested);
+            realizedProfitEl.textContent = formatCurrency(summary.realizedProfit);
+            unrealizedGainEl.textContent = formatCurrency(summary.unrealizedGain);
+            
+            // Color coding
+            realizedProfitEl.className = summary.realizedProfit >= 0 ? 'profit' : 'loss';
+            unrealizedGainEl.className = summary.unrealizedGain >= 0 ? 'profit' : 'loss';
+        };
+
+        // Load transactions data
+        const loadTransactions = async () => {
+            try {
+                statusMessage.textContent = 'Loading transactions...';
+                statusMessage.className = 'status loading';
+                
+                const response = await fetch('http://localhost:8000/api/transactions');
+                if (!response.ok) throw new Error('Failed to fetch transactions');
+                
+                const transactions = await response.json();
+                renderTransactions(transactions);
+                renderProfitChart(transactions);
+                
+                // Calculate and display summary
+                const summary = calculateSummary(transactions);
+                updateSummary(summary);
+                
+                statusMessage.textContent = `Loaded ${transactions.length} transactions`;
+                statusMessage.className = 'status success';
+            } catch (error) {
+                statusMessage.textContent = `Error: ${error.message}`;
+                statusMessage.className = 'status error';
+                console.error('Error loading transactions:', error);
+            }
+        };
+
+        // Render transactions table
+        const renderTransactions = (transactions) => {
+            transactionsBody.innerHTML = transactions.map(tx => `
+                <tr class="${tx.sell_date ? '' : 'active'}">
+                    <td>${tx.tckr}</td>
+                    <td>${formatDate(tx.buy_date)}</td>
+                    <td>${formatCurrency(tx.average_cost)}</td>
+                    <td>${tx.quantity}</td>
+                    <td>${formatCurrency(tx.current_price)}</td>
+                    <td>${formatCurrency(tx.target_price)}</td>
+                    <td>${formatCurrency(tx.current_price * tx.quantity)}</td>
+                    <td class="${tx.profit > 0 ? 'profit' : 'loss'}">
+                        ${tx.profit ? formatCurrency(tx.profit) : '-'}
+                    </td>
+                    <td>${tx.sell_date ? 'Closed' : 'Active'}</td>
+                </tr>
+            `).join('');
+        };
+
+        // Render profit chart
+        const renderProfitChart = (transactions) => {
+            const ctx = document.getElementById('profitChart').getContext('2d');
+            const closedTrades = transactions.filter(tx => tx.sell_date);
+            
+            if (profitChart) {
+                profitChart.destroy();
+            }
+            
+            profitChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: closedTrades.map(tx => tx.tckr),
+                    datasets: [{
+                        label: 'Profit/Loss',
+                        data: closedTrades.map(tx => tx.profit),
+                        backgroundColor: closedTrades.map(tx => 
+                            tx.profit > 0 ? 'rgba(75, 192, 192, 0.6)' : 'rgba(255, 99, 132, 0.6)'
+                        ),
+                        borderColor: closedTrades.map(tx => 
+                            tx.profit > 0 ? 'rgba(75, 192, 192, 1)' : 'rgba(255, 99, 132, 1)'
+                        ),
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Profit/Loss ($)'
+                            }
+                        }
+                    }
+                }
+            });
+        };
+
+        // Run strategy
+        const runStrategy = async (execute) => {
+            try {
+                statusMessage.textContent = execute 
+                    ? 'Running LIVE strategy...' 
+                    : 'Running TEST strategy...';
+                statusMessage.className = 'status loading';
+                
+                const response = await fetch(`http://localhost:8000/api/run-strategy?execute=${execute}`, {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                    }
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Strategy execution failed');
+                }
+                
+                const result = await response.json();
+                statusMessage.textContent = execute
+                    ? `Live strategy executed: ${result.buys.length} buys, ${result.sells.length} sells`
+                    : `Test strategy executed: ${result.buys.length} buys, ${result.sells.length} sells`;
+                statusMessage.className = 'status success';
+                
+                await loadTransactions();
+            } catch (error) {
+                statusMessage.textContent = `Error: ${error.message}`;
+                statusMessage.className = 'status error';
+                console.error('Error running strategy:', error);
+            }
+        };
+
+        // Event listeners
+        runTestBtn.addEventListener('click', () => runStrategy(false));
+        runLiveBtn.addEventListener('click', () => runStrategy(true));
+        refreshBtn.addEventListener('click', loadTransactions);
+
+        // Initial load
+        document.addEventListener('DOMContentLoaded', loadTransactions);
+    </script>
+</body>
+</html>
