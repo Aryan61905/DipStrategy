@@ -44,51 +44,45 @@ class TradingStrategy:
         results = {"buys": [], "sells": []}
         
         try:
-            # Get current active positions first
-            active_positions = Database.execute_query(
-                "SELECT tckr FROM transactions WHERE sell_date IS NULL"
-            )
-            active_tickers = {pos['tckr'] for pos in active_positions}
-            
             # Buy Strategy
             losers = self.get_intraday_losers()
             if not losers:
-                raise ValueError("No intraday losers data available")
+                print("No valid intraday losers found")
+                return results
                 
             for stock in losers:
                 try:
                     ticker = stock['symbol']
-                    
-                    # Skip if already have an active position
-                    if ticker in active_tickers:
-                        print(f"Skipping {ticker} - already in portfolio")
-                        continue
-                        
                     stock_data = yf.Ticker(ticker)
+                    
                     hist = stock_data.history(period="1y")
                     
                     if hist.empty:
+                        print(f"No history data for {ticker}")
                         continue
-                        
+                    print(stock_data)  
                     target_price = stock_data.info.get('targetMeanPrice')
                     if not target_price:
+                        print(f"No target price for {ticker}")
                         continue
                     
                     week52_high = hist['High'].max()
                     week52_low = hist['Low'].min()
                     pre_dip_percentile = (stock['pre_dip_price'] - week52_low) / (week52_high - week52_low) * 100
                     
-                    if (pre_dip_percentile >= self.percentile_threshold 
-                        and stock['price'] < target_price):
+                    if (pre_dip_percentile >= self.percentile_threshold and 
+                        stock['price'] < target_price):
                         
                         quantity = int(self.investment_per_trade / stock['price'])
                         
                         if execute_trades:
                             Database.execute_query(
-                                """INSERT INTO transactions 
+                                """
+                                INSERT INTO transactions 
                                 (tckr, current_price, quantity, average_cost, target_price,
                                 pre_dip_price, week52_low, week52_high, pre_dip_percentile, strategy_version)
-                                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                """,
                                 (ticker, stock['price'], quantity, stock['price'], target_price,
                                 stock['pre_dip_price'], week52_low, week52_high, pre_dip_percentile, strategy_version),
                                 fetch=False
@@ -96,7 +90,7 @@ class TradingStrategy:
                             results["buys"].append(ticker)
                             
                 except Exception as e:
-                    print(f"Error processing stock {stock.get('symbol')}: {str(e)}")
+                    print(f"Error processing stock {stock.get('symbol', 'unknown')}: {str(e)}")
                     continue
             
             # Sell Strategy
